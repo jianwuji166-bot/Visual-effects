@@ -26,7 +26,8 @@ local Config = {
 	IslandSize = UDim2.new(0, 150, 0, 30),
 	
 	BgColor = Color3.fromRGB(255, 255, 255),    
-	BgTransparency = 0.15,                       
+	BgTransparency = 0.15,          
+             
 	CardColor = Color3.fromRGB(255, 255, 255),   
 	CardTransparency = 0.7,                     
 	
@@ -355,13 +356,13 @@ myStatusLabel.TextXAlignment = Enum.TextXAlignment.Left
 myStatusLabel.Parent = myFrame
 
 -- ==========================================
--- 4. 其他玩家 3D 卡片槽位
+-- 4. 其他玩家 3D 卡片槽位（增加右下角检测展开键）
 -- ==========================================
 local Slots = {} 
 for i = 1, Config.MaxHUDs do
 	local bGui = Instance.new("BillboardGui")
 	bGui.Name = "SlotHUD_" .. i
-	bGui.Size = UDim2.new(3.2, 0, 1.2, 0) 
+	bGui.Size = UDim2.new(3.2, 0, 1.2, 0) -- 基础未展开大小
 	bGui.AlwaysOnTop = true 
 	bGui.MaxDistance = Config.MaxDistance + Config.HysteresisBuffer 
 	bGui.Enabled = false 
@@ -413,15 +414,64 @@ for i = 1, Config.MaxHUDs do
 	
 	local inventoryLabel = Instance.new("TextLabel")
 	inventoryLabel.Name = "InventoryLabel"
-	inventoryLabel.Size = UDim2.new(0.76, -10, 0.32, 0)
+	inventoryLabel.Size = UDim2.new(0.76, -24, 0.32, 0) -- 给右侧留出空间
 	inventoryLabel.Position = UDim2.new(0.24, 6, 0.58, 0)
 	inventoryLabel.BackgroundTransparency = 1
-	inventoryLabel.TextScaled = true
+	inventoryLabel.TextScaled = false -- 改为不强制全缩放，便于配合多行展开
+	inventoryLabel.TextSize = 10
 	inventoryLabel.Font = Enum.Font.Gotham
 	inventoryLabel.TextXAlignment = Enum.TextXAlignment.Left
 	inventoryLabel.Parent = frame
+
+	-- 🛠️ 新增：固定在右下角的物品栏展开控制键
+	local expandBtn = Instance.new("TextButton")
+	expandBtn.Name = "ExpandBtn"
+	expandBtn.Size = UDim2.new(0, 14, 0, 14)
+	expandBtn.Position = UDim2.new(1, -18, 1, -18)
+	expandBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
+	expandBtn.BackgroundTransparency = 0.3
+	expandBtn.Text = "＋"
+	expandBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+	expandBtn.TextSize = 9
+	expandBtn.Font = Enum.Font.GothamBold
+	expandBtn.Visible = false -- 默认隐藏，字数过多时触发显示
+	expandBtn.Parent = frame
+	Instance.new("UICorner", expandBtn).CornerRadius = UDim.new(1, 0)
+
+	local isExpanded = false
+	expandBtn.MouseButton1Click:Connect(function()
+		isExpanded = not isExpanded
+		if isExpanded then
+			expandBtn.Text = "－"
+			inventoryLabel.TextWrapped = true -- 允许文字换行
+			inventoryLabel.Size = UDim2.new(0.76, -24, 0.55, 0) -- 扩大高度切分
+			TweenService:Create(bGui, Config.ButtonBounce, {Size = UDim2.new(3.2, 0, 1.6, 0)}):Play() -- 整体往下展开
+		else
+			expandBtn.Text = "＋"
+			inventoryLabel.TextWrapped = false
+			inventoryLabel.Size = UDim2.new(0.76, -24, 0.32, 0)
+			TweenService:Create(bGui, Config.ButtonBounce, {Size = UDim2.new(3.2, 0, 1.2, 0)}):Play()
+		end
+	end)
 	
-	Slots[i] = {Gui = bGui, Frame = frame, Stroke = slotStroke, PaStroke = paStroke, CurrentSide = nil, LastTarget = nil}
+	Slots[i] = {
+		Gui = bGui, 
+		Frame = frame, 
+		Stroke = slotStroke, 
+		PaStroke = paStroke, 
+		CurrentSide = nil, 
+		LastTarget = nil,
+		ExpandBtn = expandBtn,
+		InventoryLabel = inventoryLabel,
+		GetExpanded = function() return isExpanded end,
+		ResetExpand = function() -- 重置回初始未展开状态
+			isExpanded = false
+			expandBtn.Text = "＋"
+			inventoryLabel.TextWrapped = false
+			inventoryLabel.Size = UDim2.new(0.76, -24, 0.32, 0)
+			bGui.Size = UDim2.new(3.2, 0, 1.2, 0)
+		end
+	}
 end
 
 -- ==========================================
@@ -476,15 +526,16 @@ task.spawn(function()
 			
 			-- ---- 👑 A. 本尊肩膀信息处理 ----
 			local _, myInViewport = camera:WorldToScreenPoint(myRoot.Position)
-			-- 🌟 引入 FeatureStates 实时拦截控制自己卡片显示
 			local myValid = FeatureStates.ShowSelfHUD and myInViewport and (camPosition - myRoot.Position).Magnitude <= (Config.MaxDistance + Config.HysteresisBuffer) and not isObstructedFromCamera(camera, myRoot)
 			
 			if myValid then
-				my3DHUD.Adornee = myRoot; my3DHUD.Enabled = true
+				my3DHUD.Adornee = myRoot;
+				my3DHUD.Enabled = true
 				myStatusLabel.Text = "❤️ HEALTH: " .. tostring(math.clamp(math.floor((myHum.Health / myHum.MaxHealth) * 100), 0, 100)) .. "%"
 				
 				local targetOffset, side = getOptimalShoulderOffset(myChar, camera)
-				if myCurrentSide ~= side then myCurrentSide = side; TweenService:Create(my3DHUD, Config.ShoulderSwitch, {StudsOffsetWorldSpace = targetOffset}):Play() end
+				if myCurrentSide ~= side then myCurrentSide = side;
+				TweenService:Create(my3DHUD, Config.ShoulderSwitch, {StudsOffsetWorldSpace = targetOffset}):Play() end
 			else
 				my3DHUD.Enabled = false
 			end
@@ -494,11 +545,11 @@ task.spawn(function()
 			local currentMappedSlots = {}
 			for i = 1, Config.MaxHUDs do if Slots[i].LastTarget then currentMappedSlots[Slots[i].LastTarget] = i end end
 			
-			-- 🌟 引入 FeatureStates 只有开启时才去捕获其他玩家卡片
 			if FeatureStates.ShowOthersHUD then
 				for _, player in pairs(Players:GetPlayers()) do
 					if player ~= localPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") and player.Character:FindFirstChild("Humanoid") then
-						local tChar = player.Character; local tRoot = tChar.HumanoidRootPart; local hum = tChar.Humanoid
+						local tChar = player.Character;
+						local tRoot = tChar.HumanoidRootPart; local hum = tChar.Humanoid
 						if hum.Health > 0 then
 							local _, inViewport = camera:WorldToScreenPoint(tRoot.Position)
 							if inViewport and (camPosition - tRoot.Position).Magnitude <= (currentMappedSlots[player] and (Config.MaxDistance + Config.HysteresisBuffer) or Config.MaxDistance) and not isObstructedFromCamera(camera, tRoot) then
@@ -508,7 +559,8 @@ task.spawn(function()
 					end
 				end
 			end
-local nextSlotAllocations = {}
+			
+			local nextSlotAllocations = {}
 			local remainingTargets = {}
 			for _, targetData in ipairs(validTargets) do
 				local oldSlotIndex = currentMappedSlots[targetData.player]
@@ -518,25 +570,48 @@ local nextSlotAllocations = {}
 			for i = 1, Config.MaxHUDs do if not nextSlotAllocations[i] and #remainingTargets > 0 then nextSlotAllocations[i] = table.remove(remainingTargets, 1) end end
 			
 			for i = 1, Config.MaxHUDs do
-				local slot = Slots[i]; local gui = slot.Gui; local frame = slot.Frame; local data = nextSlotAllocations[i]
+				local slot = Slots[i]; local gui = slot.Gui; local frame = slot.Frame;
+				local data = nextSlotAllocations[i]
 				if data and FeatureStates.ShowOthersHUD then
-					gui.Adornee = data.root; gui.Enabled = true
+					gui.Adornee = data.root;
+					gui.Enabled = true
 					local targetOffset, side = getOptimalShoulderOffset(data.char, camera)
-					if slot.CurrentSide ~= side then slot.CurrentSide = side; TweenService:Create(gui, Config.ShoulderSwitch, {StudsOffsetWorldSpace = targetOffset}):Play() end
+					if slot.CurrentSide ~= side then slot.CurrentSide = side;
+					TweenService:Create(gui, Config.ShoulderSwitch, {StudsOffsetWorldSpace = targetOffset}):Play() end
 					
+					-- 🔍 动态扫描检测物品栏拥挤情况
+					local tool = data.char:FindFirstChildOfClass("Tool")
+					local toolName = tool and tool.Name or "UNARMED"
+					
+					-- 如果字符长度大于 10 位，判定为过于拥挤
+					if string.len(toolName) > 10 then
+						slot.ExpandBtn.Visible = true -- 激活并在右下角展示“展开键”
+						if not slot.GetExpanded() then
+							slot.InventoryLabel.TextSize = 8 -- 未点击展开前先微调缩小字号防止完全飞出去
+						else
+							slot.InventoryLabel.TextSize = 10
+						end
+					else
+						slot.ExpandBtn.Visible = false -- 不拥挤则隐藏按键
+						slot.InventoryLabel.TextSize = 10
+						if not slot.GetExpanded() then slot.ResetExpand() end
+					end
+
 					if isDeveloper(data.player.Name) then
 						frame.BackgroundColor3 = Config.DevCardBg; frame.BackgroundTransparency = 0.15
 						slot.Stroke.Color = Config.DevCardStroke; slot.PaStroke.Color = Config.DevCardStroke
 						frame.NameLabel.TextColor3 = Color3.fromRGB(255, 255, 255); frame.NameLabel.Text = "🛠️ " .. data.player.DisplayName
-						frame.HealthBg.BackgroundColor3 = Color3.fromRGB(255, 255, 255); frame.HealthBg.Bar.BackgroundColor3 = Config.DevCardStroke
-						frame.InventoryLabel.Text = "⚡ [ CORE DEVELOPER ]"; frame.InventoryLabel.TextColor3 = Color3.fromRGB(255, 180, 200)
+						frame.HealthBg.BackgroundColor3 = Color3.fromRGB(255, 255, 255);
+						frame.HealthBg.Bar.BackgroundColor3 = Config.DevCardStroke
+						slot.InventoryLabel.Text = "⚡ [ CORE DEVELOPER ]"; slot.InventoryLabel.TextColor3 = Color3.fromRGB(255, 180, 200)
 					else
 						frame.BackgroundColor3 = Config.BgColor; frame.BackgroundTransparency = Config.BgTransparency
 						slot.Stroke.Color = Config.StrokeColor; slot.PaStroke.Color = Config.StrokeColor
 						frame.NameLabel.TextColor3 = Config.TextMain; frame.NameLabel.Text = data.player.DisplayName
-						frame.HealthBg.BackgroundColor3 = Config.ActiveColor; frame.HealthBg.Bar.BackgroundColor3 = Color3.fromRGB(80, 200, 80)
-						local tool = data.char:FindFirstChildOfClass("Tool")
-						frame.InventoryLabel.Text = tool and ("⚡ " .. tool.Name) or "[ UNARMED ]"; frame.InventoryLabel.TextColor3 = Config.TextSub
+						frame.HealthBg.BackgroundColor3 = Config.ActiveColor;
+						frame.HealthBg.Bar.BackgroundColor3 = Color3.fromRGB(80, 200, 80)
+						slot.InventoryLabel.Text = tool and ("⚡ " .. toolName) or "[ UNARMED ]";
+						slot.InventoryLabel.TextColor3 = Config.TextSub
 					end
 					
 					if slot.LastTarget ~= data.player then
@@ -544,7 +619,9 @@ local nextSlotAllocations = {}
 					end
 					frame.HealthBg.Bar.Size = UDim2.new(math.clamp(data.hum.Health / data.hum.MaxHealth, 0, 1), 0, 1, 0)
 				else
-					gui.Enabled = false; gui.Adornee = nil; slot.CurrentSide = nil; slot.LastTarget = nil
+					gui.Enabled = false;
+					gui.Adornee = nil; slot.CurrentSide = nil; slot.LastTarget = nil
+					slot.ResetExpand() -- 失去目标丢失时，自动将展开状态复位
 				end
 			end
 		end
@@ -555,49 +632,58 @@ end)
 -- 7. 大面板分页中心生成
 -- ==========================================
 local panelOverview = createTab("overview", "HUD PANEL")
-local panelSettings = createTab("settings", "VISUAL CONFIG") -- 🌟 增加新分页
+local panelSettings = createTab("settings", "VISUAL CONFIG")
 
 local function createGridCard(parent, titleText, size, position)
 	local card = Instance.new("Frame", parent)
-	card.Size = size; card.Position = position; card.BackgroundColor3 = Config.CardColor; card.BackgroundTransparency = Config.CardTransparency
+	card.Size = size;
+	card.Position = position; card.BackgroundColor3 = Config.CardColor; card.BackgroundTransparency = Config.CardTransparency
 	Instance.new("UICorner", card).CornerRadius = UDim.new(0, 8)
 	local cardStroke = Instance.new("UIStroke", card)
-	cardStroke.Color = Config.StrokeColor; cardStroke.Thickness = 1; cardStroke.Transparency = 0.55
+	cardStroke.Color = Config.StrokeColor;
+	cardStroke.Thickness = 1; cardStroke.Transparency = 0.55
 	
 	local cardTitle = Instance.new("TextLabel", card)
-	cardTitle.Size = UDim2.new(1, -16, 0, 20); cardTitle.Position = UDim2.new(0, 10, 0, 4); cardTitle.BackgroundTransparency = 1
-	cardTitle.Text = titleText; cardTitle.TextColor3 = Config.AccentColor; cardTitle.TextSize = 9; cardTitle.Font = Enum.Font.GothamBold; cardTitle.TextXAlignment = Enum.TextXAlignment.Left
+	cardTitle.Size = UDim2.new(1, -16, 0, 20);
+	cardTitle.Position = UDim2.new(0, 10, 0, 4); cardTitle.BackgroundTransparency = 1
+	cardTitle.Text = titleText; cardTitle.TextColor3 = Config.AccentColor; cardTitle.TextSize = 9; cardTitle.Font = Enum.Font.GothamBold;
+	cardTitle.TextXAlignment = Enum.TextXAlignment.Left
 	
 	local container = Instance.new("Frame", card)
-	container.Size = UDim2.new(1, -20, 1, -26); container.Position = UDim2.new(0, 10, 0, 22); container.BackgroundTransparency = 1
+	container.Size = UDim2.new(1, -20, 1, -26); container.Position = UDim2.new(0, 10, 0, 22);
+	container.BackgroundTransparency = 1
 	return container
 end
 
--- ---- [分页一内容填充] ----
 local cCore = createGridCard(panelOverview, "CORE RESOLVER", UDim2.new(0.5, -4, 0.45, 0), UDim2.new(0, 0, 0, 0))
-local coreList = Instance.new("UIListLayout", cCore); coreList.Padding = UDim.new(0, 2)
+local coreList = Instance.new("UIListLayout", cCore);
+coreList.Padding = UDim.new(0, 2)
 local function addStatusRow(parent, label, value)
 	local row = Instance.new("TextLabel", parent)
-	row.Size = UDim2.new(1, 0, 0, 14); row.BackgroundTransparency = 1; row.Text = "• " .. label .. ": " .. value
-	row.TextColor3 = Config.TextMain; row.TextSize = 10; row.Font = Enum.Font.Code; row.TextXAlignment = Enum.TextXAlignment.Left
+	row.Size = UDim2.new(1, 0, 0, 14); row.BackgroundTransparency = 1;
+	row.Text = "• " .. label .. ": " .. value
+	row.TextColor3 = Config.TextMain; row.TextSize = 10; row.Font = Enum.Font.Code;
+	row.TextXAlignment = Enum.TextXAlignment.Left
 end
 addStatusRow(cCore, "STYLE", "ACRYLIC PURE v2")
 addStatusRow(cCore, "BYPASS", "ACTIVE")
 addStatusRow(cCore, "OWN USER", localPlayer.Name)
 
 local cTactical = createGridCard(panelOverview, "IDENTITY CLEARENCE", UDim2.new(0.5, -4, 0.45, 0), UDim2.new(0.5, 4, 0, 0))
-local tacList = Instance.new("UIListLayout", cTactical); tacList.Padding = UDim.new(0, 2)
+local tacList = Instance.new("UIListLayout", cTactical);
+tacList.Padding = UDim.new(0, 2)
 addStatusRow(cTactical, "DEV_TARGET", Config.DevUsername)
 addStatusRow(cTactical, "SELF_IS_DEV", isDeveloper(localPlayer.Name) and "YES (ACTIVE)" or "NO (USER)")
 addStatusRow(cTactical, "PRIVILEGE", "STABLE MASKING")
 
 local cNetwork = createGridCard(panelOverview, "TELEMETRY CONSOLE", UDim2.new(1, 0, 0.5, 0), UDim2.new(0, 0, 0.5, 0))
 local netText = Instance.new("TextLabel", cNetwork)
-netText.Size = UDim2.new(1, 0, 1, 0); netText.BackgroundTransparency = 1
+netText.Size = UDim2.new(1, 0, 1, 0);
+netText.BackgroundTransparency = 1
 netText.Text = ">> [OK] Matrix clean setup complete without layout flashes.\n>> [OK] Identity listener attached to target: " .. Config.DevUsername .. "\n>> [SYSTEM] Config Page attached to main body."
-netText.TextColor3 = Config.TextSub; netText.TextSize = 10; netText.Font = Enum.Font.Code; netText.TextXAlignment = Enum.TextXAlignment.Left; netText.TextYAlignment = Enum.TextYAlignment.Top
+netText.TextColor3 = Config.TextSub; netText.TextSize = 10; netText.Font = Enum.Font.Code; netText.TextXAlignment = Enum.TextXAlignment.Left;
+netText.TextYAlignment = Enum.TextYAlignment.Top
 
--- ---- 🌟 [分页二：视觉控制管理中心填充] ----
 local cSwitches = createGridCard(panelSettings, "FEATURE INTERFACE PREFERENCE", UDim2.new(1, 0, 1, 0), UDim2.new(0, 0, 0, 0))
 local switchList = Instance.new("UIListLayout", cSwitches)
 switchList.Padding = UDim.new(0, 8)
@@ -631,8 +717,6 @@ local function createToggleRow(label, key, callback)
 	
 	toggleBtn.MouseButton1Click:Connect(function()
 		FeatureStates[key] = not FeatureStates[key]
-		
-		-- 丝滑开关物理反馈动画
 		local targetColor = FeatureStates[key] and Config.AccentColor or Color3.fromRGB(200, 202, 205)
 		local targetPillPos = FeatureStates[key] and UDim2.new(1, -19, 0.5, -8) or UDim2.new(0, 3, 0.5, -8)
 		
@@ -643,7 +727,6 @@ local function createToggleRow(label, key, callback)
 	end)
 end
 
--- 构建开关的联动逻辑
 createToggleRow("显示自己肩膀信息卡片 (Show My HUD)", "ShowSelfHUD")
 createToggleRow("显示他人肩膀信息卡片 (Show Others HUD)", "ShowOthersHUD")
 createToggleRow("开启自身纯白战术高亮 (Tactical Outline)", "ShowSelfHighlight", function(v)
@@ -654,58 +737,92 @@ createToggleRow("允许展开面板游戏背景模糊 (Blur Engine)", "EnableBac
 	if existingBlur then existingBlur.Size = v and 22 or 0 end
 end)
 
--- 默认加载首页
-tabButtons["overview"].BackgroundTransparency = 0.5; tabButtons["overview"].BackgroundColor3 = Config.CardColor; tabButtons["overview"].TextColor3 = Config.AccentColor
-tabButtons["overview"]:FindFirstChildOfClass("UIStroke").Transparency = 0.5; tabs["overview"].Visible = true; currentTab = "overview"
+tabButtons["overview"].BackgroundTransparency = 0.5;
+tabButtons["overview"].BackgroundColor3 = Config.CardColor; tabButtons["overview"].TextColor3 = Config.AccentColor
+tabButtons["overview"]:FindFirstChildOfClass("UIStroke").Transparency = 0.5; tabs["overview"].Visible = true;
+currentTab = "overview"
 
 -- ==========================================
--- 8. 展开/折叠与拖拽（不改变尺寸直接淡入优化）
+-- 8. 展开/折叠与拖拽（后半段完整补齐补全）
 -- ==========================================
 local function updateGlobalBlur(enable)
 	local existingBlur = Lighting:FindFirstChild("AcrylicGlobalBlur")
 	if enable and FeatureStates.EnableBackgroundBlur then 
-		if not existingBlur then local b = Instance.new("BlurEffect"); b.Name = "AcrylicGlobalBlur"; b.Size = 22; b.Parent = Lighting end
+		if not existingBlur then 
+			local b = Instance.new("BlurEffect")
+			b.Name = "AcrylicGlobalBlur"
+			b.Size = 22
+			b.Parent = Lighting 
+		end
 	else 
 		if existingBlur then existingBlur:Destroy() end 
 	end
 end
 
 local function minimize()
-	topBar.Visible = false; mainBody.Visible = false; updateGlobalBlur(false); modalModal.Visible = false 
+	topBar.Visible = false
+	mainBody.Visible = false
+	updateGlobalBlur(false)
+	modalModal.Visible = false 
 	local t1 = TweenService:Create(canvas, Config.LinearSmooth, {GroupTransparency = 1})
-	t1:Play(); t1.Completed:Connect(function() 
-		canvas.Visible = false; islandBar.Visible = true; islandBar.Position = UDim2.new(0.5, -75, 0, -40)
+	t1:Play()
+	t1.Completed:Connect(function() 
+		canvas.Visible = false
+		islandBar.Visible = true
+		islandBar.Position = UDim2.new(0.5, -75, 0, -40)
 		TweenService:Create(islandBar, Config.LinearSmooth, {Position = UDim2.new(0.5, -75, 0, 15)}):Play() 
 	end)
 end
 
 local function expand()
-	modalModal.Visible = true; updateGlobalBlur(true) 
+	modalModal.Visible = true
+	updateGlobalBlur(true) 
 	local tIsland = TweenService:Create(islandBar, Config.LinearSmooth, {Position = UDim2.new(0.5, -75, 0, -50)})
-	tIsland:Play(); tIsland.Completed:Connect(function()
-		islandBar.Visible = false; canvas.Visible = true
+	tIsland:Play()
+	tIsland.Completed:Connect(function()
+		islandBar.Visible = false
+		canvas.Visible = true
 		canvas.Size = Config.WindowSize
 		canvas.Position = UDim2.new(0.5, -240, 0.4, -140)
 		
 		local t2 = TweenService:Create(canvas, Config.LinearSmooth, {GroupTransparency = 0})
-		t2:Play(); t2.Completed:Connect(function() topBar.Visible = true; mainBody.Visible = true end)
+		t2:Play()
+		t2.Completed:Connect(function() 
+			topBar.Visible = true
+			mainBody.Visible = true 
+		end)
 	end)
 end
 
-miniButton.MouseButton1Click:Connect(minimize); islandBar.MouseButton1Click:Connect(expand)
+miniButton.MouseButton1Click:Connect(minimize)
+islandBar.MouseButton1Click:Connect(expand)
 
 local dragging, dragInput, dragStart, startPos
 topBar.InputBegan:Connect(function(input)
 	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-		dragging = true; dragStart = input.Position; startPos = canvas.Position 
-		input.Changed:Connect(function() if input.UserInputState == Enum.UserInputState.End then dragging = false end end)
+		dragging = true
+		dragStart = input.Position
+		startPos = canvas.Position 
+		input.Changed:Connect(function() 
+			if input.UserInputState == Enum.UserInputState.End then 
+				dragging = false 
+			end 
+		end)
 	end
 end)
-topBar.InputChanged:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then dragInput = input end end)
+
+topBar.InputChanged:Connect(function(input) 
+	if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then 
+		dragInput = input 
+	end 
+end)
+
 UserInputService.InputChanged:Connect(function(input)
 	if dragging and input == dragInput then
 		local delta = input.Position - dragStart
-		TweenService:Create(canvas, TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)}):Play()
+		TweenService:Create(canvas, TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+			Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+		}):Play()
 	end
 end)
 
