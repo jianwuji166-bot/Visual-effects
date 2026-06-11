@@ -28,7 +28,7 @@ getgenv().LaunchQuantumGraphicsPipeline = function(customConfig)
 	function QuantumHUD.new()
 		local self = setmetatable({}, QuantumHUD)
 		self.Locale = {
-			PanelTitle = "BaroliMonth1.2",             
+			PanelTitle = "BaroliMonth1.3",             
 			IslandTitle = "⚡ Baroli Month",               
 			TabOverview = "主页",                 
 			TabSettings = "视觉",                
