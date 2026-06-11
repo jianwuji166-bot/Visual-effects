@@ -490,7 +490,7 @@ getgenv().LaunchQuantumGraphicsPipeline = function(customConfig)
 		emitter.Parent = attachment
 		return attachment
 	end
-function QuantumHUD:_setupInteractionEngine()
+	function QuantumHUD:_setupInteractionEngine()
 		local clickRaycastParams = RaycastParams.new()
 		clickRaycastParams.FilterType = Enum.RaycastFilterType.Exclude
 
@@ -822,7 +822,7 @@ function QuantumHUD:_setupInteractionEngine()
 			light.Parent = lowerTorso
 		end
 	end
-function QuantumHUD:_maximizeMobileGraphicsPipeline()
+	function QuantumHUD:_maximizeMobileGraphicsPipeline()
 		pcall(function()
 			settings().Rendering.QualityLevel = Enum.QualityLevel.Level21
 			Lighting.Technology = Enum.Technology.Future
