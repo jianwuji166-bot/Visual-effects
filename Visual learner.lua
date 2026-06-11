@@ -28,7 +28,7 @@ getgenv().LaunchQuantumGraphicsPipeline = function(customConfig)
 	function QuantumHUD.new()
 		local self = setmetatable({}, QuantumHUD)
 		self.Locale = {
-			PanelTitle = "BaroliMonth1.3",             
+			PanelTitle = "BaroliMonth1.2",             
 			IslandTitle = "⚡ Baroli Month",               
 			TabOverview = "主页",                 
 			TabSettings = "视觉",                
@@ -490,8 +490,7 @@ getgenv().LaunchQuantumGraphicsPipeline = function(customConfig)
 		emitter.Parent = attachment
 		return attachment
 	end
-
-	function QuantumHUD:_setupInteractionEngine()
+function QuantumHUD:_setupInteractionEngine()
 		local clickRaycastParams = RaycastParams.new()
 		clickRaycastParams.FilterType = Enum.RaycastFilterType.Exclude
 
@@ -632,7 +631,8 @@ getgenv().LaunchQuantumGraphicsPipeline = function(customConfig)
 				end
 			end
 		end)
-UserInputService.InputEnded:Connect(function(input)
+
+		UserInputService.InputEnded:Connect(function(input)
 			if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 				isHolding = false
 				if not self.IsPressing then
@@ -822,8 +822,7 @@ UserInputService.InputEnded:Connect(function(input)
 			light.Parent = lowerTorso
 		end
 	end
-
-	function QuantumHUD:_maximizeMobileGraphicsPipeline()
+function QuantumHUD:_maximizeMobileGraphicsPipeline()
 		pcall(function()
 			settings().Rendering.QualityLevel = Enum.QualityLevel.Level21
 			Lighting.Technology = Enum.Technology.Future
@@ -1047,7 +1046,8 @@ UserInputService.InputEnded:Connect(function(input)
 			local cardTitle = Instance.new("TextLabel", card)
 			cardTitle.Size = UDim2.new(1, -16, 0, 20); cardTitle.Position = UDim2.new(0, 10, 0, 4); cardTitle.BackgroundTransparency = 1
 			cardTitle.Text = titleText; cardTitle.TextColor3 = self.Config.AccentColor; cardTitle.TextSize = 9; cardTitle.Font = Enum.Font.GothamBold; cardTitle.TextXAlignment = Enum.TextXAlignment.Left
-local container = Instance.new("Frame", card)
+
+			local container = Instance.new("Frame", card)
 			container.Size = UDim2.new(1, -20, 1, -26); container.Position = UDim2.new(0, 10, 0, 22); container.BackgroundTransparency = 1
 			return container
 		end
