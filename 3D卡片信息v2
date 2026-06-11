@@ -5,9 +5,11 @@ if getgenv().QuantumHUD_Running then
 		if legacyStorage then legacyStorage:Destroy() end
 		local legacyUI = game:GetService("CoreGui"):FindFirstChild("QuantumPersonalHub") or game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui"):FindFirstChild("QuantumPersonalHub")
 		if legacyUI then legacyUI:Destroy() end
+		if game:GetService("Workspace"):FindFirstChild("Quantum_PESnowLayer") then game:GetService("Workspace").Quantum_PESnowLayer:Destroy() end
 	end)
 end
 getgenv().QuantumHUD_Running = true
+getgenv().PESnow_Enabled = false 
 
 getgenv().LaunchQuantumGraphicsPipeline = function(customConfig)
 	customConfig = customConfig or {}
@@ -26,35 +28,33 @@ getgenv().LaunchQuantumGraphicsPipeline = function(customConfig)
 	function QuantumHUD.new()
 		local self = setmetatable({}, QuantumHUD)
 		self.Locale = {
-			--- UI 面板文本配置（其实这里并无什么作用，看个人喜好改动）
-			PanelTitle = "BaroliMonth1.2",             --- 主面板顶部标题
-			IslandTitle = "⚡ Baroli Month",               --- 灵动岛悬浮条标题
-			TabOverview = "主页",                 --- 标签页1标题
-			TabSettings = "视觉",                --- 标签页2标题
+			PanelTitle = "BaroliMonth1.2",             
+			IslandTitle = "⚡ Baroli Month",               
+			TabOverview = "主页",                 
+			TabSettings = "视觉",                
+			TabWeather = "环境",                  
 			
-			CardCoreTitle = "CORE RESOLVER",              --- 核心状态卡片标题
-			CardTargetTitle = "IDENTITY CLEARENCE",        --- 身份识别卡片标题
-			CardNetworkTitle = "TELEMETRY CONSOLE",       --- 控制台日志卡片标题
-			CardSwitchTitle = "FEATURE INTERFACE PREFERENCE", --- 功能开关卡片标题
+			CardCoreTitle = "CORE RESOLVER",              
+			CardTargetTitle = "IDENTITY CLEARENCE",        
+			CardNetworkTitle = "TELEMETRY CONSOLE",       
+			CardSwitchTitle = "FEATURE INTERFACE PREFERENCE", 
+			CardWeatherTitle = "ENVIRONMENTAL WEATHER CONSOLE", 
 			
-			--- 3D 卡片文本配置
-			LocalStatusPrefix = "💖 状态: ",               --- 本地玩家血量前缀
-			CoordPrefix = "坐标: X:%.1f / Y:%.1f / Z:%.1f", --- 本地玩家坐标格式化文本
-			ToolUnarmed = "[ UNARMED ]",                  --- 未装备武器时的文本说明
-			LoveMessage = "🌸如果没人爱着你，还有开发者爱着你(=^▽^=)", --- 本地卡片副标题欢迎语
+			LocalStatusPrefix = "💖 状态: ",               
+			CoordPrefix = "坐标: X:%.1f / Y:%.1f / Z:%.1f", 
+			ToolUnarmed = "[ UNARMED ]",                  
+			LoveMessage = "🌸如果没人爱着你，还有开发者爱着你(=^▽^=)", 
 			
-			--- 功能开关行文本配置
 			Switch3D = "3D HUD",
 			SwitchHighlight = "身体高亮轮毂线",
 			SwitchBlur = "允许面板背景模糊",
 			SwitchGhost = "残影",
 			
-			--- 日志输出文本配置（看个人喜好自己改）
-			LogSuccess = ">> [OK] Matrix clean setup complete without layout flashes.\n>> [FIXED] Occlusion Flickering resolved perfectly.\n>> [SYSTEM] Config Page attached to main body."
+			SwitchPESnow = "环境粒子特效",
+			
+			LogSuccess = ">> [OK] Matrix clean setup complete.\n>> [FIXED] 15m proximity filter implemented seamlessly.\n>> [VISUAL] Click counter pipeline fully operational."
 		}
 		self.Config = {
-			MaxHUDs = customConfig.MaxHUDs or 5,                                       
-			MaxDistance = customConfig.MaxDistance or 42, 
 			StorageName = "QUANTUM_STATIONARY_STORAGE",
 			
 			BodyReflectance = customConfig.BodyReflectance or 0.15,   
@@ -84,15 +84,13 @@ getgenv().LaunchQuantumGraphicsPipeline = function(customConfig)
 			FluidDragCoeff = 0.25,    
 			ParallaxIntensity = 0.35, 
 			MicroVibeFreq = 8.5,
-			SlotReleaseDelay = 1.2,   
 			
-			--- 残影参数配置
-			GhostDuration = 0.45,       --- 残影存在时间
-			GhostColor = Color3.fromRGB(255, 255, 255), --- 残影颜色
-			BodyTransparency = 0.35,    --- 残影基础透明度
-			MinMoveDistance = 1.4,     --- 触发生成残影所需的最小移动距离
-			GhostScale = 0.9,            --- 残影大小
-			GhostBackwardOffset = 0.35,  --- 残影向后方位移的轴距
+			GhostDuration = 0.45,       
+			GhostColor = Color3.fromRGB(255, 255, 255), 
+			BodyTransparency = 0.35,    
+			MinMoveDistance = 1.4,     
+			GhostScale = 0.9,            
+			GhostBackwardOffset = 0.35,  
 			TpWalkSpeed = 5, 
 			
 			WindowSize = UDim2.new(0, 480, 0, 280),      
@@ -112,16 +110,17 @@ getgenv().LaunchQuantumGraphicsPipeline = function(customConfig)
 		}
 
 		self.LocalPlayer = Players.LocalPlayer
-		self.Slots = {}
 		self.IsRunning = false
 		self.StorageFolder = nil
 		
 		self.MyFluidState = { Position = Vector3.new(), Velocity = Vector3.new(), Rotation = Vector3.new() }
-		self.SlotFluidStates = {}
+		self.TargetFluidState = { Position = Vector3.new(), Velocity = Vector3.new(), Rotation = Vector3.new() }
 		self.GlobalCurrentAlpha = 1.0       
-		self.HideTimers = {} 
-		self.ActiveSlotsMap = {} 
-		self.WasGloballyHiddenLastFrame = true 
+		
+		self.CurrentTarget = nil         
+		self.IsPressing = false          
+		self.ActiveFeedbackHighlight = nil 
+		self.PressID = 0 
 		
 		self.LastGhostPosition = Vector3.new(0, 0, 0)
 		self.SmokeTemplate = nil
@@ -136,9 +135,62 @@ getgenv().LaunchQuantumGraphicsPipeline = function(customConfig)
 		return self
 	end
 
-	--- 计算残影
+	local peFolder = nil
+	local raycastParams = RaycastParams.new()
+	raycastParams.FilterType = Enum.RaycastFilterType.Exclude
+
+	local function createBaseMicroSnow(parentFolder)
+		local snowball = Instance.new("Part")
+		snowball.Shape = Enum.PartType.Ball
+		local microSize = math.random(3, 6) / 100 
+		snowball.Size = Vector3.new(microSize, microSize, microSize)
+		snowball.Color = Color3.fromRGB(255, 255, 255)
+		snowball.Material = Enum.Material.Neon
+		snowball.CanCollide = false; snowball.CanTouch = false; snowball.CanQuery = false
+		snowball.Anchored = true; snowball.CastShadow = false
+		snowball.Parent = parentFolder
+		return snowball
+	end
+
+	local function spawnPESnow(playerRoot)
+		if not playerRoot or not peFolder then return end
+		local localRadius = 4
+		local startPos = playerRoot.Position + Vector3.new(
+			math.random(-localRadius * 10, localRadius * 10) / 10,
+			math.random(15, 65) / 10, 
+			math.random(-localRadius * 10, localRadius * 10) / 10
+		)
+		local snowball = createBaseMicroSnow(peFolder)
+		snowball.Position = startPos
+		local fallDuration = math.random(15, 25) / 10
+		local endPos = startPos + Vector3.new(math.random(-10, 10)/10, -9, math.random(-10, 10)/10)
+		
+		snowball.Transparency = 1
+		TweenService:Create(snowball, TweenInfo.new(0.15, Enum.EasingStyle.Sine), {Transparency = 0.05}):Play()
+		TweenService:Create(snowball, TweenInfo.new(fallDuration, Enum.EasingStyle.Linear), {Position = endPos}):Play()
+		
+		task.delay(fallDuration - 0.4, function() 
+			if snowball and snowball.Parent then 
+				TweenService:Create(snowball, TweenInfo.new(0.4, Enum.EasingStyle.Sine), {Transparency = 1}):Play() 
+			end 
+		end)
+		task.delay(fallDuration, function() if snowball then snowball:Destroy() end end)
+	end
+
+	local function handleWeatherToggle(enabled, folderName)
+		if enabled then
+			local folder = Instance.new("Folder")
+			folder.Name = folderName
+			folder.Parent = Workspace
+			return folder
+		else
+			local oldFolder = Workspace:FindFirstChild(folderName)
+			if oldFolder then pcall(function() oldFolder:Destroy() end) end
+			return nil
+		end
+	end
+
 	function QuantumHUD:_calculateGhostBackwardOffset(rootPart, humanoid)
-		--- 优先级
 		local motionDirection = (humanoid and humanoid.MoveDirection.Magnitude > 0) and humanoid.MoveDirection or rootPart.CFrame.LookVector
 		local backwardVector = -motionDirection.Unit * self.Config.GhostBackwardOffset
 		local antiFlickerNoise = backwardVector + Vector3.new(
@@ -148,18 +200,16 @@ getgenv().LaunchQuantumGraphicsPipeline = function(customConfig)
 		)
 		return antiFlickerNoise
 	end
+	
 	function QuantumHUD:_setupGhostPartInstance(sourcePart, antiFlickerOffset)
 		local clonePart = Instance.new("Part")
 		clonePart.Size = sourcePart.Size * self.Config.GhostScale
 		clonePart.CFrame = sourcePart.CFrame + antiFlickerOffset
 		clonePart.Anchored = true
-		clonePart.CanCollide = false
-		clonePart.CanTouch = false
-		clonePart.CanQuery = false
+		clonePart.CanCollide = false; clonePart.CanTouch = false; clonePart.CanQuery = false
 		clonePart.Material = Enum.Material.Neon
 		clonePart.Color = self.Config.GhostColor
 		
-		--- 处理特殊网格结构缩放
 		if sourcePart:IsA("MeshPart") then
 			local specialMesh = Instance.new("SpecialMesh")
 			specialMesh.MeshType = Enum.MeshType.FileMesh
@@ -172,7 +222,6 @@ getgenv().LaunchQuantumGraphicsPipeline = function(customConfig)
 			meshClone.Parent = clonePart
 		end
 		
-		--- 第一人称保护
 		if sourcePart.Name == "Head" or sourcePart.Name:find("Face") or sourcePart.Name:find("Eye") then
 			clonePart.Transparency = math.clamp(self.Config.BodyTransparency + 0.2, 0, 0.95)
 		else
@@ -200,14 +249,12 @@ getgenv().LaunchQuantumGraphicsPipeline = function(customConfig)
 		highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop 
 		highlight.Parent = ghostModel
 		
-		--- 调用
 		local offsetVector = self:_calculateGhostBackwardOffset(rootPart, humanoid)
 		for _, part in ipairs(character:GetDescendants()) do
 			if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" and part.Transparency < 0.9 then
 				local clonePart = self:_setupGhostPartInstance(part, offsetVector)
 				clonePart.Parent = ghostModel
 				
-				--- 淡出动画
 				local fadeTween = TweenService:Create(clonePart, TweenInfo.new(self.Config.GhostDuration, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Transparency = 1})
 				fadeTween:Play()
 			end
@@ -231,7 +278,6 @@ getgenv().LaunchQuantumGraphicsPipeline = function(customConfig)
 		end
 	end
 
-	--- 物理引擎
 	function QuantumHUD:_updateFluidEngine(state, targetPos, dt)
 		local displacement = state.Position - targetPos
 		local distance = displacement.Magnitude
@@ -248,38 +294,7 @@ getgenv().LaunchQuantumGraphicsPipeline = function(customConfig)
 		state.Position = state.Position + state.Velocity * dt
 		return state.Position
 	end
-	
-	--- 掩体可见性
-	function QuantumHUD:_isTargetVisibleThroughCover(camera, myChar, targetChar, targetRoot)
-		if not myChar or not targetChar then return false end
-		
-		local raycastParams = RaycastParams.new()
-		local ignoreList = {myChar, targetChar}
-		if self.StorageFolder then table.insert(ignoreList, self.StorageFolder) end
-		raycastParams.FilterDescendantsInstances = ignoreList
-		raycastParams.FilterType = Enum.RaycastFilterType.Exclude
-		
-		local camPos = camera.CFrame.Position
-		local checkPoints = { targetRoot.Position }
-		
-		local head = targetChar:FindFirstChild("Head")
-		if head then table.insert(checkPoints, head.Position) end
-		
-		local leftLeg = targetChar:FindFirstChild("Left Leg") or targetChar:FindFirstChild("LeftLowerLeg")
-		if leftLeg then table.insert(checkPoints, leftLeg.Position) end
-		
-		local rightLeg = targetChar:FindFirstChild("Right Leg") or targetChar:FindFirstChild("RightLowerLeg")
-		if rightLeg then table.insert(checkPoints, rightLeg.Position) end
-		
-		for _, point in ipairs(checkPoints) do
-			local direction = point - camPos
-			local result = Workspace:Raycast(camPos, direction, raycastParams)
-			if not result then return true end
-		end
-		return false
-	end
 
-	--- 清理历史残留
 	function QuantumHUD:PurgeLegacyPipelines()
 		pcall(function() RunService:UnbindFromRenderStep("Quantum_Stationary_Engine") end)
 		local legacy = Workspace:FindFirstChild(self.Config.StorageName)
@@ -290,7 +305,6 @@ getgenv().LaunchQuantumGraphicsPipeline = function(customConfig)
 		task.wait(0.02)
 	end
 
-	--- 3D卡片容器
 	function QuantumHUD:_buildGlassContainer(name)
 		if not self.StorageFolder then
 			self.StorageFolder = Workspace:FindFirstChild(self.Config.StorageName) or Instance.new("Folder")
@@ -319,7 +333,6 @@ getgenv().LaunchQuantumGraphicsPipeline = function(customConfig)
 		return masterPart
 	end
 
-	--- 装配高动态
 	function QuantumHUD:_attachUltraHDCanvas(parentPart, isLocal)
 		local sGui = Instance.new("SurfaceGui")
 		sGui.Name = "CanvasEngine"
@@ -408,7 +421,6 @@ getgenv().LaunchQuantumGraphicsPipeline = function(customConfig)
 		return canvas
 	end
 
-	--- 算法
 	function QuantumHUD:_calculateCinematicTransform(targetRoot, camera, state, gameTime, deltaTime)
 		local camCF = camera.CFrame
 		local baseShoulderPos = targetRoot.Position + Vector3.new(0, self.Config.ShoulderHeight, 0)
@@ -434,37 +446,34 @@ getgenv().LaunchQuantumGraphicsPipeline = function(customConfig)
 		return lookAtCF * CFrame.Angles(state.Rotation.X, state.Rotation.Y, math.sin(gameTime * 0.5) * 0.005)
 	end
 
-	--- 条件判定
 	function QuantumHUD:_evaluateGlobalState(myRoot, myHum, camera)
 		local realSpeed = myRoot.AssemblyLinearVelocity.Magnitude
 		if myHum.MoveDirection.Magnitude > 0.15 and realSpeed > 1.5 then 
 			return 1.0 
 		end
-		
 		local cameraToMeDirection = (camera.CFrame.Position - myRoot.Position).Unit
 		local lookDirectionDot = myRoot.CFrame.LookVector:Dot(cameraToMeDirection)
 		if lookDirectionDot > self.Config.ViewAngleThreshold then return 0.0 else return 1.0 end
 	end
 
-	--- 回收
 	function QuantumHUD:_forceShutDownAll3DParts()
 		if self.My3DInstance then
 			self.My3DInstance.CanvasEngine.Enabled = false
 			self.My3DInstance.GlassBlurFilter.Transparency = 1
 		end
-		for i = 1, self.Config.MaxHUDs do
-			local slot = self.Slots[i]
-			if slot and slot.Part then
-				slot.Part.CanvasEngine.Enabled = false
-				slot.Part.GlassBlurFilter.Transparency = 1
-				slot.LastTarget = nil
-			end
-			self.SlotFluidStates[i] = nil
-			self.ActiveSlotsMap[i] = nil
+		if self.Target3DCard then
+			self.Target3DCard.Part.CanvasEngine.Enabled = false
+			self.Target3DCard.Part.GlassBlurFilter.Transparency = 1
+			self.Target3DCard.LastTarget = nil
 		end
+		if self.ActiveFeedbackHighlight then
+			pcall(function() self.ActiveFeedbackHighlight:Destroy() end)
+			self.ActiveFeedbackHighlight = nil
+		end
+		self.CurrentTarget = nil
+		self.IsPressing = false
 	end
 
-	--- 粒子烟雾
 	function QuantumHUD:_createLocalSmokeTemplate()
 		local attachment = Instance.new("Attachment")
 		local emitter = Instance.new("ParticleEmitter")
@@ -482,8 +491,163 @@ getgenv().LaunchQuantumGraphicsPipeline = function(customConfig)
 		return attachment
 	end
 
-	--- 渲染主循环
+	function QuantumHUD:_setupInteractionEngine()
+		local clickRaycastParams = RaycastParams.new()
+		clickRaycastParams.FilterType = Enum.RaycastFilterType.Exclude
+
+		local isHolding = false
+		local startCharacterPos = Vector3.new()
+		local touchStartPos = Vector2.new()
+		
+		local firstClickTime = 0
+		local clickCount = 0
+		local lastClickTime = 0
+
+		local MAX_INTERACT_DISTANCE = 15 * 3.57 
+
+		UserInputService.InputBegan:Connect(function(input, gameProcessed)
+			if gameProcessed then return end
+			
+			if input.UserInputType == Enum.UserInputType.MouseWheel or 
+			   input.UserInputType == Enum.UserInputType.MouseButton2 or 
+			   input.UserInputType == Enum.UserInputType.MouseButton3 then
+				return
+			end
+
+			if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+				local camera = Workspace.CurrentCamera
+				if not camera then return end
+
+				touchStartPos = Vector2.new(input.Position.X, input.Position.Y)
+				local currentTime = os.clock()
+				isHolding = true
+
+				local timeSinceLastInput = currentTime - lastClickTime
+				lastClickTime = currentTime
+
+				if timeSinceLastInput <= 0.25 then
+					clickCount = 0
+					firstClickTime = 0
+				else
+					if clickCount == 0 or (currentTime - firstClickTime) > 0.7 then
+						clickCount = 1
+						firstClickTime = currentTime
+					else
+						clickCount = clickCount + 1
+						if clickCount == 2 then
+							clickCount = 0
+							firstClickTime = 0
+							self:_forceShutDownAll3DParts()
+							isHolding = false
+							return 
+						end
+					end
+				end
+
+				local unitRay = camera:ScreenPointToRay(touchStartPos.X, touchStartPos.Y)
+				clickRaycastParams.FilterDescendantsInstances = {self.LocalPlayer.Character, self.StorageFolder}
+				local raycastResult = Workspace:Raycast(unitRay.Origin, unitRay.Direction * 500, clickRaycastParams)
+				
+				self.PressID = self.PressID + 1
+				local currentPressID = self.PressID
+
+				if raycastResult and raycastResult.Instance then
+					local hitModel = raycastResult.Instance:FindFirstAncestorOfClass("Model")
+					local targetPlayer = hitModel and Players:GetPlayerFromCharacter(hitModel)
+					
+					if targetPlayer and targetPlayer ~= self.LocalPlayer then
+						local hum = hitModel:FindFirstChildOfClass("Humanoid")
+						local root = hitModel:FindFirstChild("HumanoidRootPart")
+						
+						local myChar = self.LocalPlayer.Character
+						local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+						
+						if hum and root and hum.Health > 0 and myRoot then
+							local currentDistance = (myRoot.Position - root.Position).Magnitude
+							if currentDistance > MAX_INTERACT_DISTANCE then
+								isHolding = false
+								return
+							end
+
+							self:_forceShutDownAll3DParts()
+							startCharacterPos = myRoot.Position
+
+							local feedbackHighlight = Instance.new("Highlight")
+							feedbackHighlight.Name = "Quantum_Interaction_Feedback"
+							feedbackHighlight.FillColor = Color3.fromRGB(255, 255, 255)
+							feedbackHighlight.FillTransparency = 1.0 
+							feedbackHighlight.OutlineColor = Color3.fromRGB(255, 255, 255) 
+							feedbackHighlight.OutlineTransparency = self.Config.OutlineTransparency
+							feedbackHighlight.Adornee = hitModel
+							feedbackHighlight.Parent = hitModel
+							self.ActiveFeedbackHighlight = feedbackHighlight
+
+							local destroyConn
+							destroyConn = feedbackHighlight.AncestryChanged:Connect(function(_, parent)
+								if not parent then
+									destroyConn:Disconnect()
+									if self.ActiveFeedbackHighlight == feedbackHighlight then
+										self.ActiveFeedbackHighlight = nil
+									end
+									self.CurrentTarget = nil
+									self.IsPressing = false
+								end
+							end)
+
+							task.spawn(function()
+								local elapsed = 0
+								while elapsed < 1.0 do
+									task.wait(0.05)
+									elapsed = elapsed + 0.05
+									
+									local currentMyChar = self.LocalPlayer.Character
+									local currentMyRoot = currentMyChar and currentMyChar:FindFirstChild("HumanoidRootPart")
+									
+									if currentMyRoot and isHolding then
+										local moveDist = (currentMyRoot.Position - startCharacterPos).Magnitude
+										local realTimeDist = (currentMyRoot.Position - root.Position).Magnitude
+										
+										if moveDist > 1.5 or realTimeDist > MAX_INTERACT_DISTANCE then
+											if feedbackHighlight and feedbackHighlight.Parent then
+												pcall(function() feedbackHighlight:Destroy() end)
+											end
+											isHolding = false
+											return
+										end
+									end
+								end
+
+								if self.PressID == currentPressID and isHolding and feedbackHighlight.Parent then
+									self.CurrentTarget = targetPlayer
+									self.IsPressing = true
+									
+									local basePos = root.Position + (camera.CFrame.RightVector * self.Config.EyeSeparation)
+									self.TargetFluidState.Position = basePos
+									self.TargetFluidState.Velocity = Vector3.new()
+								end
+							end)
+							return
+						end
+					end
+				end
+			end
+		end)
+UserInputService.InputEnded:Connect(function(input)
+			if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+				isHolding = false
+				if not self.IsPressing then
+					if self.ActiveFeedbackHighlight then
+						pcall(function() self.ActiveFeedbackHighlight:Destroy() end)
+						self.ActiveFeedbackHighlight = nil
+					end
+				end
+			end
+		end)
+	end
+
 	function QuantumHUD:_launchPipelineLoop()
+		local MAX_INTERACT_DISTANCE = 15 * 3.57
+
 		RunService:BindToRenderStep("Quantum_Stationary_Engine", Enum.RenderPriority.Camera.Value + 1, function(dt)
 			if not self.IsRunning then return end
 			
@@ -493,14 +657,18 @@ getgenv().LaunchQuantumGraphicsPipeline = function(customConfig)
 			local myHum = myChar and myChar:FindFirstChild("Humanoid")
 			local currentTime = os.clock()
 			
+			if myRoot then
+				if getgenv().PESnow_Enabled then
+					for _ = 1, 2 do spawnPESnow(myRoot) end
+				end
+			end
+
 			if myChar and myHum and myRoot and self.FeatureStates.EnableGhostTrail then
 				pcall(function()
 					if myHum.MoveDirection.Magnitude > 0 then
 						myChar:TranslateBy(myHum.MoveDirection * self.Config.TpWalkSpeed / 100)
-						
 						local currentPosition = myRoot.Position
 						local distanceMoved = (currentPosition - self.LastGhostPosition).Magnitude
-						
 						if distanceMoved >= self.Config.MinMoveDistance then
 							self:_createSingleGhostInstance(myChar)
 							self.LastGhostPosition = currentPosition
@@ -524,26 +692,6 @@ getgenv().LaunchQuantumGraphicsPipeline = function(customConfig)
 			
 			local isGlobalVisible = self.GlobalCurrentAlpha < 0.95
 			local computedBlurTransparency = 0.45 + (self.GlobalCurrentAlpha * 0.55)
-			
-			if isGlobalVisible and self.WasGloballyHiddenLastFrame then
-				table.clear(self.ActiveSlotsMap)  
-				
-				for _, player in pairs(Players:GetPlayers()) do
-					if player ~= self.LocalPlayer and player.Character then
-						local tChar = player.Character
-						local tRoot = tChar:FindFirstChild("HumanoidRootPart")
-						if tRoot then
-							local isBlockedByCover = not self:_isTargetVisibleThroughCover(camera, myChar, tChar, tRoot)
-							if isBlockedByCover then
-								self.HideTimers[player.UserId] = currentTime - 1.0
-							else
-								self.HideTimers[player.UserId] = nil
-							end
-						end
-					end
-				end
-			end
-self.WasGloballyHiddenLastFrame = not isGlobalVisible 
 
 			if self.My3DInstance then
 				if isGlobalVisible then
@@ -571,154 +719,58 @@ self.WasGloballyHiddenLastFrame = not isGlobalVisible
 					self.My3DInstance.GlassBlurFilter.Transparency = 1
 				end
 			end
-			
-			local finalizedSlotData = table.create(self.Config.MaxHUDs)
-			
-			if isGlobalVisible then
-				local validTargetsMap = {} 
-				local activePlayersMap = {}
 
-				for _, player in pairs(Players:GetPlayers()) do
-					if player ~= self.LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") and player.Character:FindFirstChild("Humanoid") then
-						local tChar = player.Character; local tRoot = tChar.HumanoidRootPart; local tHum = tChar.Humanoid
-						
-						if tHum.Health > 0 then
-							local userId = player.UserId
-							activePlayersMap[userId] = true
-							local distance = (myRoot.Position - tRoot.Position).Magnitude
-							
-							if distance <= self.Config.MaxDistance then
-								local _, inViewport = camera:WorldToScreenPoint(tRoot.Position)
-								if inViewport then
-									local tSpeed = tRoot.AssemblyLinearVelocity.Magnitude
-									local isMovingNow = (tHum.MoveDirection.Magnitude > 0.15 and tSpeed > 1.5)
-									local isBlockedByCover = not self:_isTargetVisibleThroughCover(camera, myChar, tChar, tRoot)
-									local isPerfectVisibleNow = (not isMovingNow) and (not isBlockedByCover)
-									local finalRenderDecision = false
-									
-									if isPerfectVisibleNow then
-										self.HideTimers[userId] = nil
-										finalRenderDecision = true
-									else
-										if not self.HideTimers[userId] then
-											self.HideTimers[userId] = currentTime
-											finalRenderDecision = true
-										else
-											local elapsedSeconds = currentTime - self.HideTimers[userId]
-											if elapsedSeconds >= 1.0 then
-												finalRenderDecision = false
-											else
-												finalRenderDecision = true
-											end
-										end
-									end
-									
-									if finalRenderDecision then
-										validTargetsMap[player] = {player = player, root = tRoot, hum = tHum, dist = distance, char = tChar}
-									end
-								end
-							end
-						end
-					end
-				end
-				
-				for cachedId, _ in pairs(self.HideTimers) do
-					if not activePlayersMap[cachedId] then
-						self.HideTimers[cachedId] = nil
-					end
-				end
+			local slot = self.Target3DCard
+			local tPlayer = self.CurrentTarget
+			local tChar = tPlayer and tPlayer.Character
+			local tRoot = tChar and tChar:FindFirstChild("HumanoidRootPart")
+			local tHum = tChar and tChar:FindFirstChild("Humanoid")
 
-				local assignedPlayers = {}
-
-				for i = 1, self.Config.MaxHUDs do
-					local currentOccupant = self.ActiveSlotsMap[i]
-					if currentOccupant and validTargetsMap[currentOccupant.player] then
-						local currentData = validTargetsMap[currentOccupant.player]
-						finalizedSlotData[i] = currentData
-						assignedPlayers[currentOccupant.player] = true
-						currentOccupant.lastActiveTime = currentTime 
-					end
-				end
-
-				local unassignedCandidates = {}
-				for player, data in pairs(validTargetsMap) do
-					if not assignedPlayers[player] then
-						table.insert(unassignedCandidates, data)
-					end
-				end
-				table.sort(unassignedCandidates, function(a, b) return a.dist < b.dist end)
-
-				local candidateIdx = 1
-				for i = 1, self.Config.MaxHUDs do
-					if not finalizedSlotData[i] then
-						local oldOccupant = self.ActiveSlotsMap[i]
-						local canReuseSlot = true
-						
-						if oldOccupant then
-							local elapsed = currentTime - oldOccupant.lastActiveTime
-							if elapsed < self.Config.SlotReleaseDelay then
-								canReuseSlot = false 
-							end
-						end
-
-						if canReuseSlot then
-							local newTargetData = unassignedCandidates[candidateIdx]
-							if newTargetData then
-								finalizedSlotData[i] = newTargetData
-								self.ActiveSlotsMap[i] = { player = newTargetData.player, lastActiveTime = currentTime }
-								candidateIdx = candidateIdx + 1
-							else
-								self.ActiveSlotsMap[i] = nil
-							end
-						end
-					end
+			if tRoot and myRoot then
+				local realTimeDist = (myRoot.Position - tRoot.Position).Magnitude
+				if realTimeDist > MAX_INTERACT_DISTANCE then
+					self:_forceShutDownAll3DParts()
+					return
 				end
 			end
-			
-			for i = 1, self.Config.MaxHUDs do
-				local slot = self.Slots[i]
-				local data = finalizedSlotData[i]
+
+			if slot and isGlobalVisible and self.IsPressing and tRoot and tHum and tHum.Health > 0 then
+				slot.Part.CanvasEngine.Enabled = true
+				local alphaGroup = slot.Part.CanvasEngine.AlphaGroup
+				alphaGroup.GroupTransparency = self.GlobalCurrentAlpha
+				slot.Part.GlassBlurFilter.Transparency = computedBlurTransparency
 				
-				if data and isGlobalVisible then
-					slot.Part.CanvasEngine.Enabled = true
-					local alphaGroup = slot.Part.CanvasEngine.AlphaGroup
-					alphaGroup.GroupTransparency = self.GlobalCurrentAlpha
-					slot.Part.GlassBlurFilter.Transparency = computedBlurTransparency
-					
-					if wasHidden or not self.SlotFluidStates[i] or slot.LastTarget ~= data.player then
-						local basePos = data.root.Position + (camera.CFrame.RightVector * self.Config.EyeSeparation)
-						self.SlotFluidStates[i] = { Position = basePos, Velocity = Vector3.new(), Rotation = Vector3.new() }
-					end
-					
-					local finalCF = self:_calculateCinematicTransform(data.root, camera, self.SlotFluidStates[i], currentTime, dt)
-					slot.Part.CFrame = finalCF
-					slot.Part.GlassBlurFilter.CFrame = finalCF * CFrame.new(0, 0, -0.01)
-					
-					if slot.LastTarget ~= data.player then
-						slot.LastTarget = data.player
-						alphaGroup.TitleLabel.Text = data.player.DisplayName
-						
-						local avatarUrl = "rbxthumb://type=AvatarHeadShot&id=" .. tostring(data.player.UserId) .. "&w=150&h=150"
-						if alphaGroup.UserAvatar.Image ~= avatarUrl then
-							alphaGroup.UserAvatar.Image = avatarUrl
-						end
-						local tool = data.char:FindFirstChildOfClass("Tool")
-						alphaGroup.SubTagLabel.Text = tool and ("🌸 " .. tool.Name) or self.Locale.ToolUnarmed
-					end
-					alphaGroup.StatusLabel.Text = "💢 HP: " .. tostring(math.floor(data.hum.Health)) .. " / " .. tostring(data.hum.MaxHealth)
-				else
-					if slot.Part then
-						slot.Part.CanvasEngine.Enabled = false
-						slot.Part.GlassBlurFilter.Transparency = 1
-					end
-					slot.LastTarget = nil
-					self.SlotFluidStates[i] = nil
+				if slot.LastTarget ~= tPlayer then
+					local basePos = tRoot.Position + (camera.CFrame.RightVector * self.Config.EyeSeparation)
+					self.TargetFluidState = { Position = basePos, Velocity = Vector3.new(), Rotation = Vector3.new() }
 				end
+				
+				local finalCF = self:_calculateCinematicTransform(tRoot, camera, self.TargetFluidState, currentTime, dt)
+				slot.Part.CFrame = finalCF
+				slot.Part.GlassBlurFilter.CFrame = finalCF * CFrame.new(0, 0, -0.01)
+				
+				if slot.LastTarget ~= tPlayer then
+					slot.LastTarget = tPlayer
+					alphaGroup.TitleLabel.Text = tPlayer.DisplayName
+					
+					local avatarUrl = "rbxthumb://type=AvatarHeadShot&id=" .. tostring(tPlayer.UserId) .. "&w=150&h=150"
+					if alphaGroup.UserAvatar.Image ~= avatarUrl then
+						alphaGroup.UserAvatar.Image = avatarUrl
+					end
+					local tool = tChar:FindFirstChildOfClass("Tool")
+					alphaGroup.SubTagLabel.Text = tool and ("🌸 " .. tool.Name) or self.Locale.ToolUnarmed
+				end
+				alphaGroup.StatusLabel.Text = "💢 HP: " .. tostring(math.floor(tHum.Health)) .. " / " .. tostring(tHum.MaxHealth)
+			else
+				if slot and slot.Part then
+					slot.Part.CanvasEngine.Enabled = false
+					slot.Part.GlassBlurFilter.Transparency = 1
+				end
+				if slot then slot.LastTarget = nil end
 			end
 		end)
 	end
 
-	--- 白轮廓高亮
 	function QuantumHUD:_applySelfHighlight(character)
 		if not character then return end
 		local old1 = character:FindFirstChild("SelfTacticalOutline")
@@ -739,7 +791,6 @@ self.WasGloballyHiddenLastFrame = not isGlobalVisible
 		highlight.Parent = character
 	end
 
-	--- 材质
 	function QuantumHUD:_applyVisualEnhancements(character)
 		if not character then return end
 		local oldLight = character:FindFirstChild("Quantum_Self_PointLight")
@@ -772,7 +823,6 @@ self.WasGloballyHiddenLastFrame = not isGlobalVisible
 		end
 	end
 
-	--- 画质
 	function QuantumHUD:_maximizeMobileGraphicsPipeline()
 		pcall(function()
 			settings().Rendering.QualityLevel = Enum.QualityLevel.Level21
@@ -821,6 +871,7 @@ self.WasGloballyHiddenLastFrame = not isGlobalVisible
 			end
 		end)
 	end
+
 	function QuantumHUD:_buildInteractiveControlHub()
 		local targetParent = CoreGui:FindFirstChild("RobloxGui") or self.LocalPlayer:WaitForChild("PlayerGui")
 		
@@ -981,8 +1032,10 @@ self.WasGloballyHiddenLastFrame = not isGlobalVisible
 			tabButtons[id] = btn
 			return panel
 		end
+		
 		local panelOverview = createTab("overview", self.Locale.TabOverview)
 		local panelSettings = createTab("settings", self.Locale.TabSettings)
+		local panelWeather = createTab("weather", self.Locale.TabWeather) 
 
 		local function createGridCard(parent, titleText, size, position)
 			local card = Instance.new("Frame", parent)
@@ -994,11 +1047,11 @@ self.WasGloballyHiddenLastFrame = not isGlobalVisible
 			local cardTitle = Instance.new("TextLabel", card)
 			cardTitle.Size = UDim2.new(1, -16, 0, 20); cardTitle.Position = UDim2.new(0, 10, 0, 4); cardTitle.BackgroundTransparency = 1
 			cardTitle.Text = titleText; cardTitle.TextColor3 = self.Config.AccentColor; cardTitle.TextSize = 9; cardTitle.Font = Enum.Font.GothamBold; cardTitle.TextXAlignment = Enum.TextXAlignment.Left
-
-			local container = Instance.new("Frame", card)
+local container = Instance.new("Frame", card)
 			container.Size = UDim2.new(1, -20, 1, -26); container.Position = UDim2.new(0, 10, 0, 22); container.BackgroundTransparency = 1
 			return container
 		end
+		
 		local cCore = createGridCard(panelOverview, self.Locale.CardCoreTitle, UDim2.new(0.5, -4, 0.45, 0), UDim2.new(0, 0, 0, 0))
 		local coreList = Instance.new("UIListLayout", cCore); coreList.Padding = UDim.new(0, 2)
 
@@ -1011,21 +1064,27 @@ self.WasGloballyHiddenLastFrame = not isGlobalVisible
 		addStatusRow(cCore, "STYLE", "ACRYLIC PURE v2")
 		addStatusRow(cCore, "BYPASS", "ACTIVE")
 		addStatusRow(cCore, "OWN USER", self.LocalPlayer.Name)
+		
 		local cTarget = createGridCard(panelOverview, self.Locale.CardTargetTitle, UDim2.new(0.5, -4, 0.45, 0), UDim2.new(0.5, 4, 0, 0))
 		local tacList = Instance.new("UIListLayout", cTarget); tacList.Padding = UDim.new(0, 2)
 		addStatusRow(cTarget, "DEV_TARGET", self.Config.DevUsername)
 		addStatusRow(cTarget, "SELF_IS_DEV", isDeveloper(self.LocalPlayer.Name) and "YES (ACTIVE)" or "NO (USER)")
 		addStatusRow(cTarget, "PRIVILEGE", "STABLE MASKING")
+		
 		local cNetwork = createGridCard(panelOverview, self.Locale.CardNetworkTitle, UDim2.new(1, 0, 0.5, 0), UDim2.new(0, 0, 0.5, 0))
 		local netText = Instance.new("TextLabel", cNetwork)
 		netText.Size = UDim2.new(1, 0, 1, 0); netText.BackgroundTransparency = 1
 		netText.Text = self.Locale.LogSuccess
 		netText.TextColor3 = self.Config.TextSub; netText.TextSize = 10; netText.Font = Enum.Font.Code; netText.TextXAlignment = Enum.TextXAlignment.Left; netText.TextYAlignment = Enum.TextYAlignment.Top
+		
 		local cSwitches = createGridCard(panelSettings, self.Locale.CardSwitchTitle, UDim2.new(1, 0, 1, 0), UDim2.new(0, 0, 0, 0))
 		local switchList = Instance.new("UIListLayout", cSwitches); switchList.Padding = UDim.new(0, 4)
 
-		local function createToggleRow(label, key, callback)
-			local rowFrame = Instance.new("Frame", cSwitches)
+		local cWeatherSwitches = createGridCard(panelWeather, self.Locale.CardWeatherTitle, UDim2.new(1, 0, 1, 0), UDim2.new(0, 0, 0, 0))
+		local weatherSwitchList = Instance.new("UIListLayout", cWeatherSwitches); weatherSwitchList.Padding = UDim.new(0, 4)
+
+		local function createToggleRow(cardContainer, label, defaultState, callback)
+			local rowFrame = Instance.new("Frame", cardContainer)
 			rowFrame.Size = UDim2.new(1, 0, 0, 32)
 			rowFrame.BackgroundTransparency = 1
 
@@ -1038,41 +1097,52 @@ self.WasGloballyHiddenLastFrame = not isGlobalVisible
 			local toggleBtn = Instance.new("TextButton", rowFrame)
 			toggleBtn.Size = UDim2.new(0, 48, 0, 22)
 			toggleBtn.Position = UDim2.new(1, -48, 0.5, -11)
-			toggleBtn.BackgroundColor3 = self.FeatureStates[key] and self.Config.AccentColor or Color3.fromRGB(200, 202, 205)
+			toggleBtn.BackgroundColor3 = defaultState and self.Config.AccentColor or Color3.fromRGB(200, 202, 205)
 			toggleBtn.Text = ""
 			Instance.new("UICorner", toggleBtn).CornerRadius = UDim.new(1, 0)
 
 			local pill = Instance.new("Frame", toggleBtn)
 			pill.Size = UDim2.new(0, 16, 0, 16)
-			pill.Position = self.FeatureStates[key] and UDim2.new(1, -19, 0.5, -8) or UDim2.new(0, 3, 0.5, -8)
+			pill.Position = defaultState and UDim2.new(1, -19, 0.5, -8) or UDim2.new(0, 3, 0.5, -8)
 			pill.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
 			Instance.new("UICorner", pill).CornerRadius = UDim.new(1, 0)
 
+			local currentState = defaultState
 			toggleBtn.MouseButton1Click:Connect(function()
-				self.FeatureStates[key] = not self.FeatureStates[key]
-				local targetColor = self.FeatureStates[key] and self.Config.AccentColor or Color3.fromRGB(200, 202, 205)
-				local targetPillPos = self.FeatureStates[key] and UDim2.new(1, -19, 0.5, -8) or UDim2.new(0, 3, 0.5, -8)
+				currentState = not currentState
+				local targetColor = currentState and self.Config.AccentColor or Color3.fromRGB(200, 202, 205)
+				local targetPillPos = currentState and UDim2.new(1, -19, 0.5, -8) or UDim2.new(0, 3, 0.5, -8)
 
 				TweenService:Create(toggleBtn, self.Config.ButtonBounce, {BackgroundColor3 = targetColor}):Play()
 				TweenService:Create(pill, self.Config.ButtonBounce, {Position = targetPillPos}):Play()
 
-				if callback then callback(self.FeatureStates[key]) end
+				if callback then callback(currentState) end
 			end)
 		end
-		createToggleRow(self.Locale.Switch3D, "Enable3DHUD", function(v)
+		
+		createToggleRow(cSwitches, self.Locale.Switch3D, self.FeatureStates.Enable3DHUD, function(v)
+			self.FeatureStates.Enable3DHUD = v
 			if not v then self:_forceShutDownAll3DParts() end
 		end)
-		createToggleRow(self.Locale.SwitchHighlight, "ShowSelfHighlight", function(v)
+		createToggleRow(cSwitches, self.Locale.SwitchHighlight, self.FeatureStates.ShowSelfHighlight, function(v)
+			self.FeatureStates.ShowSelfHighlight = v
 			self:_applySelfHighlight(self.LocalPlayer.Character)
 		end)
-		createToggleRow(self.Locale.SwitchBlur, "EnableBackgroundBlur", function(v)
+		createToggleRow(cSwitches, self.Locale.SwitchBlur, self.FeatureStates.EnableBackgroundBlur, function(v)
+			self.FeatureStates.EnableBackgroundBlur = v
 			local existingBlur = Lighting:FindFirstChild("AcrylicGlobalBlur")
 			if existingBlur then existingBlur.Size = v and 22 or 0 end
 		end)
-		createToggleRow(self.Locale.SwitchGhost, "EnableGhostTrail", function(v)
+		createToggleRow(cSwitches, self.Locale.SwitchGhost, self.FeatureStates.EnableGhostTrail, function(v)
+			self.FeatureStates.EnableGhostTrail = v
 			if v and self.LocalPlayer.Character and self.LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
 				self.LastGhostPosition = self.LocalPlayer.Character.HumanoidRootPart.Position
 			end
+		end)
+		
+		createToggleRow(cWeatherSwitches, self.Locale.SwitchPESnow, getgenv().PESnow_Enabled, function(v)
+			getgenv().PESnow_Enabled = v
+			peFolder = handleWeatherToggle(v, "Quantum_PESnowLayer")
 		end)
 
 		tabButtons["overview"].BackgroundTransparency = 0.5;
@@ -1165,6 +1235,7 @@ self.WasGloballyHiddenLastFrame = not isGlobalVisible
 		islandBar.Visible = true
 		islandBar.Position = UDim2.new(0.5, -75, 0, 15)
 	end
+	
 	function QuantumHUD:Start()
 		self:PurgeLegacyPipelines()
 		self.IsRunning = true
@@ -1192,13 +1263,12 @@ self.WasGloballyHiddenLastFrame = not isGlobalVisible
 			end
 		end)
 		
-		for i = 1, self.Config.MaxHUDs do
-			local part = self:_buildGlassContainer("Slot_" .. i)
-			local canvas = self:_attachUltraHDCanvas(part, false)
-			self.Slots[i] = {Part = part, Canvas = canvas, LastTarget = nil}
-		end
+		local part = self:_buildGlassContainer("InteractionSlot")
+		local canvas = self:_attachUltraHDCanvas(part, false)
+		self.Target3DCard = {Part = part, Canvas = canvas, LastTarget = nil}
 		
 		self:_buildInteractiveControlHub()
+		self:_setupInteractionEngine() 
 		self:_launchPipelineLoop()
 	end
 
@@ -1207,8 +1277,6 @@ self.WasGloballyHiddenLastFrame = not isGlobalVisible
 end
 
 LaunchQuantumGraphicsPipeline({
-	MaxHUDs = 5,              
-	MaxDistance = 42,         
 	BodyReflectance = 0.15,    
 	HeadReflectance = 0.01,    
 	LightBrightness = 0.45,    
