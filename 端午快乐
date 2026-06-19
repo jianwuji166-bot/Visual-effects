@@ -1,0 +1,93 @@
+local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
+local Player = Players.LocalPlayer
+local PlayerGui = Player:WaitForChild("PlayerGui")
+local oldSequenceUI = PlayerGui:FindFirstChild("SequenceLoadingUI")
+if oldSequenceUI then oldSequenceUI:Destroy() end
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "SequenceLoadingUI"
+screenGui.IgnoreGuiInset = true
+screenGui.DisplayOrder = 999999
+screenGui.ResetOnSpawn = false
+screenGui.Parent = PlayerGui
+local bg = Instance.new("Frame")
+bg.Size = UDim2.new(1, 0, 1, 0)
+bg.BackgroundColor3 = Color3.fromRGB(10, 8, 14)
+bg.BorderSizePixel = 0
+bg.Parent = screenGui
+local label = Instance.new("TextLabel")
+local baseSize = UDim2.new(0, 700, 0, 120)
+label.Size = baseSize
+label.Position = UDim2.new(0.5, 0, 0.5, 0)
+label.AnchorPoint = Vector2.new(0.5, 0.5)
+label.BackgroundTransparency = 1
+label.TextColor3 = Color3.new(1, 1, 1)
+label.TextSize = 24
+label.Font = Enum.Font.GothamBold
+label.TextWrapped = true
+label.TextTransparency = 1 
+label.Parent = bg
+local textGradient = Instance.new("UIGradient")
+textGradient.Color = ColorSequence.new({
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 60, 120)),   
+    ColorSequenceKeypoint.new(0.5, Color3.fromRGB(255, 200, 100)), 
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(40, 180, 255))    
+})
+textGradient.Rotation = 45
+textGradient.Parent = label
+local textFragments = {
+    "端午节快乐！凑企鹅与芭罗莉月给您送上祝福！🎁",
+    "祝您端午假期，事事顺心，厄运退散！🎉🎉",
+    "也不要忘记和您的家人团聚，吃粽子，划龙舟！🛶",
+    "三天假期玩的爽，福利多多有钱拿！💰",
+    "顺风顺水迎夏季，假期无烦恼！🎁🎉",
+    "最后祝您生活愉快！"
+}
+task.spawn(function()
+    while label and label.Parent do
+        textGradient.Rotation = (textGradient.Rotation + 1) % 360
+        task.wait(0.02)
+    end
+end)
+local function playTextSegment(text)
+    label.Text = text
+    label.Size = UDim2.new(0, 650, 0, 100) 
+    TweenService:Create(label, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+        TextTransparency = 0,
+        Size = baseSize
+    }):Play()
+    task.wait(3.2)
+    local fadeOut = TweenService:Create(label, TweenInfo.new(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
+        TextTransparency = 1
+    })
+    fadeOut:Play()
+    fadeOut.Completed:Wait() 
+end
+for _, fragmentText in ipairs(textFragments) do
+    playTextSegment(fragmentText)
+end
+label.Text = "正在加载中，祝您端午节快乐😼"
+TweenService:Create(label, TweenInfo.new(0.2), {TextTransparency = 0}):Play()
+local success, errorMessage = pcall(function()
+    local scriptRawCode = game:HttpGet("https://raw.githubusercontent.com/jianwuji166-bot/tulip520/main/Unstable%20version")
+    local executableFunc = loadstring(scriptRawCode)
+    if executableFunc then
+        executableFunc() 
+    else
+        error("Error: 加载脚本失败")
+    end
+end)
+if not success then
+    warn("[Tulip Boot Error]: " .. tostring(errorMessage))
+    label.Text = "网络断开或错误"
+    label.TextColor3 = Color3.fromRGB(255, 80, 80)
+    textGradient:Destroy() 
+    task.wait(2.5)
+end
+local finalFade = TweenService:Create(bg, TweenInfo.new(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+    BackgroundTransparency = 1
+})
+TweenService:Create(label, TweenInfo.new(0.3), {TextTransparency = 1}):Play()
+finalFade:Play()
+finalFade.Completed:Wait()
+screenGui:Destroy()
